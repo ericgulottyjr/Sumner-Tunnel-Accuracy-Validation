@@ -156,7 +156,7 @@ def insert_into_database(trip_id, departure_stop, departure_time, arrival_stop, 
     cursor.close()
     conn.close()
 
-def commit_arrival_times():
+def grab_arrival_times():
     while True:
         # for loop for CR stops
         for departure_stop_id, departure_stop_name in CR_departure_stops.items():
@@ -181,5 +181,5 @@ def commit_arrival_times():
 # Generate database schema
 create_database_table()
 
-# Start the process
-commit_arrival_times()
+# Start process
+grab_arrival_times()
