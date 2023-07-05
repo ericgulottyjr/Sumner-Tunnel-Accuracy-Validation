@@ -14,7 +14,7 @@ file_path = input("Enter the file path: ")
 df = pd.read_csv(file_path, sep=';', header=None).iloc[: , :-1]
 
 # Define columns
-df.columns = names=['Timestamp','id','Location','Display Status','Message','Traffic Time','Transit Time','Traffic/Train Ratio']
+df.columns = names=['Timestamp','Sign ID','Location','Logic State','Message','Highway TT','Transit TT','Highway/Transit Ratio']
 df['Timestamp'] = pd.to_datetime(df.Timestamp)
 
 # Define a function to parse messages and remove excess text
@@ -26,7 +26,8 @@ def parse_message(field):
 df['Message'] = df['Message'].apply(lambda x: parse_message(x))
 
 # Dataframe with only Commuter Rail Stops
-CR_signs = df[df.Location.isin(['Newburyport','Beverly'])]
+CR_signs = df[(df['Location'].isin(['Newburyport', 'Beverly'])) & (df['Logic State'] == 'Normal')]
+
 
 # Define a function to parse the message and extract departure times
 def extract_time(message):
@@ -36,21 +37,22 @@ def extract_time(message):
 # Create an empty DataFrame to store inconsistencies
 inconsistencies = pd.DataFrame(columns=['Timestamp', 'Location', 'Message'])
 
-# Buffer time in minutes to account for slight timestamp differences
-time_buffer = 0
-
 # Iterate over each row in the DataFrame
 for index, row in CR_signs.iterrows():
     timestamp = row['Timestamp']
     location = row['Location']
     message = row['Message']
-    id = row['id']
+    id = row['Sign ID']
 
     # Parse the message to obtain expected departure times
     expected_times = extract_time(message)
 
+    # Time buffer variable
+    #time_buffer = 0
+    time_buffer = 5 if location == "Newburyport" else 10
+
     # Calculate the rounded down timestamp and subtract the buffer time
-    buffered_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(minutes=time_buffer)
+    buffered_timestamp = pd.to_datetime(timestamp) + pd.Timedelta(minutes=time_buffer)
 
     # Query the PostgreSQL database for matching records
     query = """
@@ -76,7 +78,9 @@ conn.close()
 
 # Display the inconsistencies DataFrame
 if not inconsistencies.empty:
-    print(f'{len(inconsistencies)} inconsistencies were found.')
+    print(f"{len(inconsistencies)} inconsistencies were found.")
+    for loc in inconsistencies["Location"].unique():
+        print(f"{len(inconsistencies[inconsistencies['Location'] == loc])} inconsistencies for signs at {loc}.")
     print(inconsistencies)
 else:
     print('No inconsistencies found.')
