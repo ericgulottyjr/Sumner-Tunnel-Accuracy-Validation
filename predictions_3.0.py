@@ -138,7 +138,8 @@ def get_arrival_time(trip_id, stop_id):
 def insert_into_database(trip_id, departure_stop, departure_time, arrival_stop, arrival_time):
     conn = psycopg2.connect(**db_config)
     cursor = conn.cursor()
-
+    
+    # Define INSERT query
     query = "INSERT INTO response_data (timestamp, trip_id, depart_station, depart_time, arrive_station, arrive_time, transit_time) VALUES (%s, %s, %s, %s, %s, %s, %s)"
     transit_time = None
 
@@ -155,8 +156,9 @@ def insert_into_database(trip_id, departure_stop, departure_time, arrival_stop, 
     cursor.close()
     conn.close()
 
-def process_departure_stops():
+def commit_arrival_times():
     while True:
+        # for loop for CR stops
         for departure_stop_id, departure_stop_name in CR_departure_stops.items():
             trip_ids, departure_times = get_trip_ids(departure_stop_id, CR_url_params)
 
@@ -165,6 +167,7 @@ def process_departure_stops():
                 if departure_time and arrival_time:
                     insert_into_database(trip_id, departure_stop_name, departure_time, CR_arrival_stop_name, arrival_time)
 
+        # for loop for BL stops
         for stop_id, departure_stop_name in BL_departure_stops.items():
             trip_ids, departure_times = get_trip_ids(stop_id, BL_url_params)
 
@@ -179,4 +182,4 @@ def process_departure_stops():
 create_database_table()
 
 # Start the process
-process_departure_stops()
+commit_arrival_times()
