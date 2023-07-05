@@ -7,29 +7,29 @@ from predictions_config import db_config
 conn = psycopg2.connect(**db_config)
 cursor = conn.cursor()
 
-# Sample DataFrame with parsed data
-data = {
-    'Timestamp': [
-        '2023-07-03 10:54:22',
-        '2023-07-03 10:54:30',
-        # ...
-    ],
-    'Location': [
-        'Beverly',
-        'Newburyport',
-        # ...
-    ],
-    'Message': [
-        'FASTER;ROUTE;USE MBTA;TRAINS;AT 11:20;AT 11:50',
-        'FASTER;ROUTE;USE MBTA;TRAINS;AT 11:24;AT 12:54',
-        # ...
-    ]
-}
+# Allow the user to input a file path
+file_path = input("Enter the file path: ")
 
-df = pd.DataFrame(data)
+# Pase the VMS Log .txt file
+df = pd.read_csv(file_path, sep=';', header=None).iloc[: , :-1]
+
+# Define columns
+df.columns = names=['Timestamp','id','Location','Display Status','Message','Traffic Time','Transit Time','Traffic/Train Ratio']
+df['Timestamp'] = pd.to_datetime(df.Timestamp)
+
+# Define a function to parse messages and remove excess text
+def parse_message(field):
+    subfields = re.split(r'\[nl\]|\[np\]', field)
+    return ' '.join(subfields)
+
+# Apply the parsing function to the Message column
+df['Message'] = df['Message'].apply(lambda x: parse_message(x))
+
+# Dataframe with only Commuter Rail Stops
+CR_signs = df[df.Location.isin(['Newburyport','Beverly'])]
 
 # Define a function to parse the message and extract departure times
-def parse_message(message):
+def extract_time(message):
     times = re.findall(r'AT (\d{2}:\d{2})', message)
     return times
 
@@ -40,13 +40,14 @@ inconsistencies = pd.DataFrame(columns=['Timestamp', 'Location', 'Message'])
 time_buffer = 0
 
 # Iterate over each row in the DataFrame
-for index, row in df.iterrows():
+for index, row in CR_signs.iterrows():
     timestamp = row['Timestamp']
     location = row['Location']
     message = row['Message']
+    id = row['id']
 
     # Parse the message to obtain expected departure times
-    expected_times = parse_message(message)
+    expected_times = extract_time(message)
 
     # Calculate the rounded down timestamp and subtract the buffer time
     buffered_timestamp = pd.to_datetime(timestamp) - pd.Timedelta(minutes=time_buffer)
@@ -75,6 +76,7 @@ conn.close()
 
 # Display the inconsistencies DataFrame
 if not inconsistencies.empty:
+    print(f'{len(inconsistencies)} inconsistencies were found.')
     print(inconsistencies)
 else:
     print('No inconsistencies found.')
