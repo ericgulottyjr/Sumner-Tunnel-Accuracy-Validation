@@ -42,7 +42,7 @@ def process_data(df):
         time_buffer = 15 if location == 'Newburyport' else 20
         #time_buffer = inrix_time + 5 if location == 'Newburyport' else inrix_time + 10
 
-        # Calculate the rounded down timestamp and subtract the buffer time
+        # Calculate the rounded down timestamp and add the buffer time
         buffered_timestamp = pd.to_datetime(timestamp) + pd.Timedelta(minutes=time_buffer)
 
         # Query the PostgreSQL database for matching records
