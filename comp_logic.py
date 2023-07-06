@@ -39,7 +39,7 @@ def process_data(df):
         reported_times = extract_time(message)
 
         # Time buffer variable
-        time_buffer = 17 if location == 'Newburyport' else 22
+        time_buffer = 15 if location == 'Newburyport' else 20
         #time_buffer = inrix_time + 5 if location == 'Newburyport' else inrix_time + 10
 
         # Calculate the rounded down timestamp and subtract the buffer time
