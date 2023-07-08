@@ -7,4 +7,5 @@ Routes include: (Wonderland -> State), (Beachmont -> State), (Newburyport -> Nor
 `predictions_4` inserts both into the database table, `None` if no predictions exist.
 
 ### Comparison script
-`comp_logic` produces a `.txt` file containing the inconsistencies found between `vmslog` and the MBTA's `V3-API`.
+`comp_logic_2` produces a `.txt` file containing the inconsistencies found between `vmslog` and the MBTA's `V3-API`.\
+In particular, the comparison logic highlights entries in `vmslog` where scheduled departures were displayed instead of predicted departures.
