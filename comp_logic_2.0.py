@@ -26,22 +26,24 @@ def process_data(df):
     filtered_df = df[(df['Location'].isin(['Newburyport', 'Beverly'])) & (df['Logic State'] == 'Normal')]
 
     # Create an empty DataFrame to store inconsistencies
-    inconsistencies = pd.DataFrame(columns=['Timestamp', 'Location', 'Message', 'Scheduled Times', 'Predicted Times', 'Mismatch Type'])
+    inconsistencies = pd.DataFrame(columns=['Timestamp', 'Buffered Timestamp', 'Location', 'Message', 'Scheduled Times', 'Predicted Times', 'Mismatch Type'])
 
     # Iterate over each row in the DataFrame
     for index, row in filtered_df.iterrows():
         timestamp = row['Timestamp']
         location = row['Location']
         message = row['Message']
+        parking_TT = row['Transit Parking TT']
 
         # Parse the message to obtain reported departure times
         reported_times = extract_time(message)
 
         # Time buffer variable
-        time_buffer = 15 if location == 'Newburyport' else 20
+        #time_buffer = parking_TT + 5 if location == 'Newburyport' else parking_TT + 10
+
 
         # Calculate the rounded down timestamp and add the buffer time
-        buffered_timestamp = pd.to_datetime(timestamp) + pd.Timedelta(minutes=time_buffer)
+        buffered_timestamp = pd.to_datetime(timestamp) + pd.Timedelta(minutes=parking_TT)
 
         # Query the PostgreSQL database for matching records
         query = """
@@ -88,7 +90,7 @@ def process_data(df):
             # Store the details in the inconsistencies DataFrame
             inconsistencies = pd.concat(
                 [inconsistencies, pd.DataFrame(
-                    {'Timestamp': [timestamp], 'Location': [location], 'Message': [message],
+                    {'Timestamp': [timestamp], 'Buffered Timestamp': [buffered_timestamp], 'Location': [location], 'Message': [message],
                      'Scheduled Times': [scheduled_times], 'Predicted Times': [predicted_times], 'Mismatch Type': [mismatch_type]})],
                 ignore_index=True
             )
@@ -97,7 +99,7 @@ def process_data(df):
             mismatch_type = 'No Data'
             inconsistencies = pd.concat(
                 [inconsistencies, pd.DataFrame(
-                    {'Timestamp': [timestamp], 'Location': [location], 'Message': [message],
+                    {'Timestamp': [timestamp], 'Buffered Timestamp': [buffered_timestamp], 'Location': [location], 'Message': [message],
                      'Scheduled Times': None, 'Predicted Times': None, 'Mismatch Type': [mismatch_type]})],
                 ignore_index=True
             )
@@ -112,7 +114,7 @@ def select_file():
     file_name = os.path.basename(file_path)
     if file_path:
         df = pd.read_csv(file_path, sep=';', header=None).iloc[:, :-1]
-        df.columns = ['Timestamp', 'Sign ID', 'Location', 'Logic State', 'Message', 'Highway TT', 'Transit TT', 'Highway/Transit Ratio'] #ADD INRIX WHEN AVAILABLE
+        df.columns = ['Timestamp', 'Sign ID', 'Location', 'Logic State', 'Message', 'Transit Alert IDs', 'Transit Parking TT', 'Highway TT', 'Transit Departure Time', 'Transit Arrival Time', 'Total Transit TT', 'Highway/Transit Ratio']
         df['Timestamp'] = pd.to_datetime(df['Timestamp'])
         df['Message'] = df['Message'].apply(parse_message)
         # The final processed dataframe
