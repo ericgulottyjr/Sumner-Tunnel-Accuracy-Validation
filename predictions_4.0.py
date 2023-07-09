@@ -159,7 +159,12 @@ def insert_into_database(trip_id, departure_stop, scheduled_depart_time, predict
 
 
 def grab_arrival_times():
+    # Start the process every 60 seconds
+    target_interval = 60
+
     while True:
+        start_time = time.time()
+
         # for loop for CR stops
         for departure_stop_id, departure_stop_name in CR_departure_stops.items():
             trip_ids, departure_times = get_trip_ids(departure_stop_id, CR_url_params)
@@ -182,7 +187,13 @@ def grab_arrival_times():
 
                 insert_into_database(trip_id, departure_stop_name, scheduled_depart_time, predicted_depart_time, BL_arrival_stop_name, arrival_time)
 
-        time.sleep(60)
+        end_time = time.time()
+        run_time = end_time - start_time
+
+        # Calculate the remaining time until 60 seconds has passed
+        remaining_time = target_interval - run_time
+        
+        time.sleep(remaining_time)
 
 # Generate database schema
 create_database_table()
