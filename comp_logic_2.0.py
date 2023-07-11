@@ -55,7 +55,7 @@ def process_data(df):
         buffered_timestamp = pd.to_datetime(timestamp) + pd.Timedelta(minutes=parking_TT)
 
         # Check to make sure the message is correct
-        if (ratio >= 1.2 and 'FASTER ROUTE ON MBTA' not in message) or ('FASTER ROUTE ON MBTA' in message and ratio < 1.2):
+        if (ratio >= 1.2 and 'FASTER ROUTE' not in message) or ('FASTER ROUTE' in message and ratio < 1.2):
             message_errors = pd.concat(
                 [message_errors, pd.DataFrame(
                     {'Timestamp': [timestamp], 'Sign ID': [sign_id], 'Buffered Timestamp': [buffered_timestamp], 'Location': [location], 'Message': [message],
@@ -138,7 +138,7 @@ def select_file():
         # The final processed dataframe
         processed, message_errors = process_data(df)
 
-    mbta_faster_percentage = len(df[df['Message'].str.contains('FASTER ROUTE ON MBTA') & (df['Highway/Transit Ratio'] >= 1.2)]) / len(df)
+    mbta_faster_percentage = len(df[df['Message'].str.contains('FASTER ROUTE') & (df['Highway/Transit Ratio'] >= 1.2)]) / len(df)
     print(f"Percentage of Faster MBTA Route Notifications: {mbta_faster_percentage}")
 
     if not processed.empty:
@@ -158,10 +158,11 @@ def select_file():
         print(f"Complete Mismatch Percentage: {complete_mismatch}")
         print(f"No Data percentage: {no_data_percentage}")
         print(processed)
+    else:
+        print('No inconsistencies found.')
+        
     if not message_errors.empty:
         message_errors.to_csv("message_error_output.txt", index=False)
         print('Message Errors found.')
-    else:
-        print('No inconsistencies found.')
 
 select_file()
