@@ -25,8 +25,9 @@ def process_data(df):
     # Filter dataframe for desired locations and logic state
     filtered_df = df[(df['Location'].isin(['Newburyport', 'Beverly'])) & (df['Logic State'] == 'Normal')]
 
-    # Create an empty DataFrame to store inconsistencies
+    # Create an empty DataFrame to store inconsistencies and message errors
     inconsistencies = pd.DataFrame(columns=['Timestamp', 'Sign ID', 'Buffered Timestamp', 'Location', 'Message', 'Scheduled Times', 'Predicted Times', 'Mismatch Type'])
+    message_errors = pd.DataFrame(columns=['Timestamp', 'Sign ID', 'Buffered Timestamp', 'Location', 'Message', 'Ratio'])
 
     # Iterate over each row in the DataFrame
     for index, row in filtered_df.iterrows():
@@ -35,12 +36,13 @@ def process_data(df):
         location = row['Location']
         message = row['Message']
         parking_TT = row['Transit Parking TT']
+        ratio = row['Highway/Transit Ratio']
 
         # Check to make sure each relevant field is not null
         if pd.isnull(timestamp) or pd.isnull(location) or pd.isnull(message) or pd.isnull(parking_TT):
             inconsistencies = pd.concat(
                 [inconsistencies, pd.DataFrame(
-                    {'Timestamp': [timestamp], 'Sign ID': [sign_id], 'Location': [location], 'Message': [message],
+                    {'Timestamp': [timestamp], 'Sign ID': [sign_id], 'Buffered Timestamp': None, 'Location': [location], 'Message': [message],
                     'Scheduled Times': None, 'Predicted Times': None, 'Mismatch Type': 'Missing Field'})],
                 ignore_index=True
             )
@@ -51,6 +53,15 @@ def process_data(df):
 
         # Calculate the rounded down timestamp and add the buffer time
         buffered_timestamp = pd.to_datetime(timestamp) + pd.Timedelta(minutes=parking_TT)
+
+        # Check to make sure the message is correct
+        if (ratio >= 1.2 and 'FASTER ROUTE ON MBTA' not in message) or ('FASTER ROUTE ON MBTA' in message and ratio < 1.2):
+            message_errors = pd.concat(
+                [message_errors, pd.DataFrame(
+                    {'Timestamp': [timestamp], 'Sign ID': [sign_id], 'Buffered Timestamp': [buffered_timestamp], 'Location': [location], 'Message': [message],
+                    'Ratio': [ratio]})],
+                ignore_index=True
+            )
 
         # Query the PostgreSQL database for matching records
         query = """
@@ -111,7 +122,7 @@ def process_data(df):
                 ignore_index=True
             )
             
-    return inconsistencies
+    return inconsistencies, message_errors
 
 # Define a function that allows the user to select a file
 def select_file():
@@ -125,23 +136,31 @@ def select_file():
         df['Timestamp'] = pd.to_datetime(df['Timestamp'])
         df['Message'] = df['Message'].apply(parse_message)
         # The final processed dataframe
-        processed = process_data(df)
-        # Determine percentage of inconsistencies that are mismatched on either predictions or schedules
-        mismatch_percentage = len(processed)/len(df)
-        predictions_percentage = len(processed[processed['Mismatch Type'] == 'Predictions'])/len(processed)
-        partial_mismatch = len(processed[processed['Mismatch Type'] == 'Partial'])/len(processed)
-        complete_mismatch = len(processed[processed['Mismatch Type'] == 'Complete'])/len(processed)
-        no_data_percentage = len(processed[processed['Mismatch Type'] == 'No Data'])/len(processed)
+        processed, message_errors = process_data(df)
+
+    mbta_faster_percentage = len(df[df['Message'].str.contains('FASTER ROUTE ON MBTA') & (df['Highway/Transit Ratio'] >= 1.2)]) / len(df)
+    print(f"Percentage of Faster MBTA Route Notifications: {mbta_faster_percentage}")
 
     if not processed.empty:
+        # Determine percentage of inconsistencies that are mismatched on either predictions or schedules
+        mismatch_percentage = len(processed)/len(df)
+        predictions_percentage = len(processed[processed['Mismatch Type'] == 'Predictions']) / len(processed)
+        partial_mismatch = len(processed[processed['Mismatch Type'] == 'Partial']) / len(processed)
+        complete_mismatch = len(processed[processed['Mismatch Type'] == 'Complete']) / len(processed)
+        no_data_percentage = len(processed[processed['Mismatch Type'] == 'No Data']) / len(processed)
+
         #processed.to_csv(f"{file_name}_validation_output.txt", index=False)
-        processed.to_csv("validation_output.txt", index=False)
+        processed.to_csv("mismatch_output.txt", index=False)
+        
         print(f"Percentage of Mismatched Entries: {mismatch_percentage}")
         print(f"Predictions Mismatch Percentage: {predictions_percentage}")
         print(f"Partial Mismatch Percentage: {partial_mismatch}")
         print(f"Complete Mismatch Percentage: {complete_mismatch}")
         print(f"No Data percentage: {no_data_percentage}")
         print(processed)
+    if not message_errors.empty:
+        message_errors.to_csv("message_error_output.txt", index=False)
+        print('Message Errors found.')
     else:
         print('No inconsistencies found.')
 
