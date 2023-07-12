@@ -61,7 +61,7 @@ def create_database_table():
     cursor.close()
     conn.close()
 
-def get_trip_ids(departure_stop_id, url_params):
+def get_scheduled_trips(departure_stop_id, url_params):
     # Make API call to schedules endpoint for departure stop
     url = f"{SCHEDULES_ENDPOINT}?filter[stop]={departure_stop_id}{url_params}&api_key={API_KEY}"
     data = make_api_call(url)
@@ -94,22 +94,39 @@ def get_trip_ids(departure_stop_id, url_params):
         departure_time = departure_info['departure_time']
         trip_ids.append(departure_info['trip_id'])
         departure_times.append(departure_time)
-        if len(trip_ids) >= 2:
+        if len(trip_ids) >= 3:
             break
 
     return trip_ids, departure_times
 
 
-def get_predicted_departure_time(trip_id, stop_id):
+def get_predicted_trips(stop_id, url_params):
     # Make API call to predictions endpoint for specified trip ID
-    url = f"{PREDICTIONS_ENDPOINT}?filter[trip]={trip_id}&filter[stop]={stop_id}&api_key={API_KEY}"
+    url = f"{PREDICTIONS_ENDPOINT}?filter[stop]={stop_id}{url_params}&api_key={API_KEY}"
     data = make_api_call(url)
 
-    if len(data['data']) > 0:
-        departure_time = data['data'][0]['attributes'].get('departure_time')
-        return departure_time
+    trip_ids = []
+    departure_times = []
 
-    return None
+    if len(data['data']) > 0:
+        # Get the predicted departure times and trip IDs from the response
+        predicted_departure_times = [
+            {
+                'departure_time': datetime.fromisoformat(prediction['attributes']['departure_time']),
+                'trip_id': prediction['relationships']['trip']['data']['id']
+            }
+            for prediction in data['data']
+        ]
+
+        # Find the remaining departure times
+        for departure_info in predicted_departure_times:
+            departure_time = departure_info['departure_time']
+            trip_ids.append(departure_info['trip_id'])
+            departure_times.append(departure_time)
+        
+        return trip_ids, departure_times
+
+    return None, None
 
 
 def get_arrival_time(trip_id, stop_id):
@@ -167,25 +184,91 @@ def grab_arrival_times():
 
         # for loop for CR stops
         for departure_stop_id, departure_stop_name in CR_departure_stops.items():
-            trip_ids, departure_times = get_trip_ids(departure_stop_id, CR_url_params)
+            scheduled_trip_ids, scheduled_departure_times = get_scheduled_trips(departure_stop_id, CR_url_params)
+            predicted_trip_ids, predicted_departure_times = get_predicted_trips(departure_stop_id, CR_url_params)
 
-            for trip_id, departure_time in zip(trip_ids, departure_times):
-                scheduled_depart_time = departure_time
-                predicted_depart_time = get_predicted_departure_time(trip_id, departure_stop_id)
-                arrival_time = get_arrival_time(trip_id, CR_arrival_stop_id)
+            # Check if predicted trip IDs and departure times are None
+            if predicted_trip_ids is None or predicted_departure_times is None:
+                # Handle the case where no predicted trips are available
+                for i in range(len(scheduled_trip_ids)):
+                    trip_id = scheduled_trip_ids[i]
+                    scheduled_depart_time = scheduled_departure_times[i]
+                    predicted_depart_time = None
+                    arrival_time = get_arrival_time(trip_id, CR_arrival_stop_id)
+                    insert_into_database(trip_id, departure_stop_name, scheduled_depart_time, predicted_depart_time, CR_arrival_stop_name, arrival_time)
+            else:
+                # Compare up to three trip IDs
+                for i in range(3):
+                    if i < len(scheduled_trip_ids) and i < len(predicted_trip_ids):
+                        # If trip IDs match, assign predicted and scheduled times
+                        if scheduled_trip_ids[i] == predicted_trip_ids[i]:
+                            trip_id = scheduled_trip_ids[i]
+                            scheduled_depart_time = scheduled_departure_times[i]
+                            predicted_depart_time = predicted_departure_times[i]
+                        else:
+                            # If trip IDs don't match, insert each with the other field set as null
+                            trip_id = scheduled_trip_ids[i]
+                            scheduled_depart_time = scheduled_departure_times[i]
+                            predicted_depart_time = None
+                    else:
+                        # If one of the lists is exhausted, insert remaining trip IDs with null fields
+                        if i < len(scheduled_trip_ids):
+                            trip_id = scheduled_trip_ids[i]
+                            scheduled_depart_time = scheduled_departure_times[i]
+                            predicted_depart_time = None
+                        elif i < len(predicted_trip_ids):
+                            trip_id = predicted_trip_ids[i]
+                            scheduled_depart_time = None
+                            predicted_depart_time = predicted_departure_times[i]
+                        else:
+                            break
 
-                insert_into_database(trip_id, departure_stop_name, scheduled_depart_time, predicted_depart_time, CR_arrival_stop_name, arrival_time)
+                    arrival_time = get_arrival_time(trip_id, CR_arrival_stop_id)
+                    insert_into_database(trip_id, departure_stop_name, scheduled_depart_time, predicted_depart_time, CR_arrival_stop_name, arrival_time)
 
         # for loop for BL stops
         for departure_stop_id, departure_stop_name in BL_departure_stops.items():
-            trip_ids, departure_times = get_trip_ids(departure_stop_id, BL_url_params)
+            scheduled_trip_ids, scheduled_departure_times = get_scheduled_trips(departure_stop_id, BL_url_params)
+            predicted_trip_ids, predicted_departure_times = get_predicted_trips(departure_stop_id, BL_url_params)
 
-            for trip_id, departure_time in zip(trip_ids, departure_times):
-                scheduled_depart_time = departure_time
-                predicted_depart_time = get_predicted_departure_time(trip_id, departure_stop_id)
-                arrival_time = get_arrival_time(trip_id, BL_arrival_stop_id)
+            # Check if predicted trip IDs and departure times are None
+            if predicted_trip_ids is None or predicted_departure_times is None:
+                # Handle the case where no predicted trips are available
+                for i in range(len(scheduled_trip_ids)):
+                    trip_id = scheduled_trip_ids[i]
+                    scheduled_depart_time = scheduled_departure_times[i]
+                    predicted_depart_time = None
+                    arrival_time = get_arrival_time(trip_id, BL_arrival_stop_id)
+                    insert_into_database(trip_id, departure_stop_name, scheduled_depart_time, predicted_depart_time, BL_arrival_stop_name, arrival_time)
+            else:
+                # Compare up to three trip IDs
+                for i in range(3):
+                    if i < len(scheduled_trip_ids) and i < len(predicted_trip_ids):
+                        # If trip IDs match, assign predicted and scheduled times
+                        if scheduled_trip_ids[i] == predicted_trip_ids[i]:
+                            trip_id = scheduled_trip_ids[i]
+                            scheduled_depart_time = scheduled_departure_times[i]
+                            predicted_depart_time = predicted_departure_times[i]
+                        else:
+                            # If trip IDs don't match, insert each with the other field set as null
+                            trip_id = scheduled_trip_ids[i]
+                            scheduled_depart_time = scheduled_departure_times[i]
+                            predicted_depart_time = None
+                    else:
+                        # If one of the lists is exhausted, insert remaining trip IDs with null fields
+                        if i < len(scheduled_trip_ids):
+                            trip_id = scheduled_trip_ids[i]
+                            scheduled_depart_time = scheduled_departure_times[i]
+                            predicted_depart_time = None
+                        elif i < len(predicted_trip_ids):
+                            trip_id = predicted_trip_ids[i]
+                            scheduled_depart_time = None
+                            predicted_depart_time = predicted_departure_times[i]
+                        else:
+                            break
 
-                insert_into_database(trip_id, departure_stop_name, scheduled_depart_time, predicted_depart_time, BL_arrival_stop_name, arrival_time)
+                    arrival_time = get_arrival_time(trip_id, BL_arrival_stop_id)
+                    insert_into_database(trip_id, departure_stop_name, scheduled_depart_time, predicted_depart_time, BL_arrival_stop_name, arrival_time)
 
         end_time = time.time()
         run_time = end_time - start_time
