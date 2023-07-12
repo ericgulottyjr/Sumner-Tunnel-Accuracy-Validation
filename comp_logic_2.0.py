@@ -63,19 +63,51 @@ def process_data(df):
                 ignore_index=True
             )
 
-        # Query the PostgreSQL database for matching records
+        # Query the PostgreSQL database for matching schedule records at the same timestamp (up to the minute)
         query = """
-                SELECT depart_station, scheduled_depart_time, predicted_depart_time 
-                FROM schedules_and_pred 
-                WHERE date_trunc('minute', timestamp) = date_trunc('minute', %s)
-                AND depart_station = %s;
-                """
-        cursor.execute(query, (buffered_timestamp, location))
+            SELECT depart_station, scheduled_depart_time
+            FROM schedules_and_pred 
+            WHERE date_trunc('minute', timestamp) = date_trunc('minute', %s)
+            AND depart_station = %s
+            AND scheduled_depart_time >= %s
+            ORDER BY scheduled_depart_time;
+        """
+        buffer_time = pd.to_datetime(timestamp) + pd.Timedelta(minutes=parking_TT)
+        cursor.execute(query, (timestamp, location, buffer_time))
         queried_records = cursor.fetchall()
 
-        # Extract actual departure times from the queried records
-        scheduled_times = [record[1].strftime('%H:%M') if record[1] else None for record in queried_records]
-        predicted_times = [record[2].strftime('%H:%M') if record[2] else None for record in queried_records]
+        scheduled_times = []
+
+        # Check if there are three or more schedule records available
+        if len(queried_records) >= 3:
+            # Remove duplicate schedule times
+            queried_records = list(set(queried_records))
+
+            # Sort the queried records by departure time in ascending order
+            queried_records.sort(key=lambda x: x[1])
+
+            # Select the two closest records to the buffer time
+            selected_records = queried_records[:2]
+
+            # Extract actual departure times from the selected records
+            scheduled_times = [record[1].strftime('%H:%M') if record[1] else None for record in selected_records]
+        else:
+            scheduled_times = [record[1].strftime('%H:%M') if record[1] else None for record in queried_records]
+        
+        # Query the PostgreSQL database for matching records at the same timestamp (up to the minute)
+        query = """
+            SELECT depart_station, predicted_depart_time 
+            FROM schedules_and_pred 
+            WHERE date_trunc('minute', timestamp) = date_trunc('minute', %s)
+            AND depart_station = %s
+            AND predicted_depart_time >= %s
+            ORDER BY predicted_depart_time;
+        """
+        cursor.execute(query, (timestamp, location, buffer_time))
+        queried_records = cursor.fetchall()
+
+        # Extract actual predicted departure times from the queried records
+        predicted_times = [record[1].strftime('%H:%M') if record[1] else None for record in queried_records]
 
         # Check if any results were returned by the query
         if scheduled_times:
