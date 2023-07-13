@@ -8,4 +8,5 @@ Routes include: (Wonderland -> State), (Beachmont -> State), (Newburyport -> Nor
 
 ### Comparison script
 `comp_logic_2` produces a `.txt` file containing the inconsistencies found between `vmslog` and the MBTA's `V3-API`.\
-In particular, the comparison logic highlights entries in `vmslog` where scheduled departures were displayed instead of predicted departures.
+In particular, the comparison logic highlights entries in `vmslog` where scheduled departures were displayed instead of predicted departures.\
+Currently, `comp_logic-2` also produces a second `.txt` file which contains any message errors that have been displayed on VMS signs.
