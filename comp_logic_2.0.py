@@ -4,9 +4,8 @@ import re
 import os
 import tkinter as tk
 from tkinter import filedialog
-import matplotlib.pyplot as plt
 from predictions_config import db_config
-
+from datetime import datetime
 # Connect to PostgreSQL database
 conn = psycopg2.connect(**db_config)
 cursor = conn.cursor()
@@ -17,8 +16,15 @@ def parse_message(field):
     return ' '.join(subfields)
 
 def extract_time(message):
-    times = re.findall(r'AT (\d{2}:\d{2})', message)
-    return times
+    times = re.findall(r'@ (\d{2}:\d{2} [APM]{2})', message)
+    extracted_times = []
+    
+    for time in times:
+        extracted_time = datetime.strptime(time, '%I:%M %p').strftime('%H:%M')
+        extracted_times.append(extracted_time)
+    
+    return extracted_times
+
 
 # Define a function to process the data
 def process_data(df):
