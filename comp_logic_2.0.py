@@ -32,7 +32,7 @@ def process_data(df):
     filtered_df = df[(df['Location'].isin(['Newburyport', 'Beverly'])) & (df['Logic State'] == 'Normal')]
 
     # Create an empty DataFrame to store inconsistencies and message errors
-    inconsistencies = pd.DataFrame(columns=['Timestamp', 'Sign ID', 'Buffered Timestamp', 'Location', 'Message', 'Scheduled Times', 'Predicted Times', 'Mismatch Type'])
+    inconsistencies = pd.DataFrame(columns=['Timestamp', 'Sign ID', 'Buffered Timestamp', 'Location', 'Reported Times', 'Scheduled Times', 'Predicted Times', 'Mismatch Type'])
     message_errors = pd.DataFrame(columns=['Timestamp', 'Sign ID', 'Buffered Timestamp', 'Location', 'Message', 'Ratio'])
 
     # Iterate over each row in the DataFrame
@@ -44,18 +44,18 @@ def process_data(df):
         parking_TT = row['Transit Parking TT']
         ratio = row['Highway/Transit Ratio']
 
+        # Parse the message to obtain reported departure times
+        reported_times = extract_time(message)
+
         # Check to make sure each relevant field is not null
         if pd.isnull(timestamp) or pd.isnull(location) or pd.isnull(message) or pd.isnull(parking_TT):
             inconsistencies = pd.concat(
                 [inconsistencies, pd.DataFrame(
-                    {'Timestamp': [timestamp], 'Sign ID': [sign_id], 'Buffered Timestamp': None, 'Location': [location], 'Message': [message],
+                    {'Timestamp': [timestamp], 'Sign ID': [sign_id], 'Buffered Timestamp': None, 'Location': [location], 'Reported Times': [reported_times],
                     'Scheduled Times': None, 'Predicted Times': None, 'Mismatch Type': 'Missing Field'})],
                 ignore_index=True
             )
             continue
-
-        # Parse the message to obtain reported departure times
-        reported_times = extract_time(message)
 
         # Calculate the rounded down timestamp and add the buffer time
         buffered_timestamp = pd.to_datetime(timestamp) + pd.Timedelta(minutes=parking_TT)
@@ -146,7 +146,7 @@ def process_data(df):
             # Store the details in the inconsistencies DataFrame
             inconsistencies = pd.concat(
                 [inconsistencies, pd.DataFrame(
-                    {'Timestamp': [timestamp], 'Sign ID': [sign_id], 'Buffered Timestamp': [buffered_timestamp], 'Location': [location], 'Message': [message],
+                    {'Timestamp': [timestamp], 'Sign ID': [sign_id], 'Buffered Timestamp': [buffered_timestamp], 'Location': [location], 'Reported Times': [reported_times],
                      'Scheduled Times': [scheduled_times], 'Predicted Times': [predicted_times], 'Mismatch Type': [mismatch_type]})],
                 ignore_index=True
             )
@@ -155,7 +155,7 @@ def process_data(df):
             mismatch_type = 'No Data'
             inconsistencies = pd.concat(
                 [inconsistencies, pd.DataFrame(
-                    {'Timestamp': [timestamp], 'Sign ID': [sign_id], 'Buffered Timestamp': [buffered_timestamp], 'Location': [location], 'Message': [message],
+                    {'Timestamp': [timestamp], 'Sign ID': [sign_id], 'Buffered Timestamp': [buffered_timestamp], 'Location': [location], 'Reported Times': [reported_times],
                      'Scheduled Times': None, 'Predicted Times': None, 'Mismatch Type': [mismatch_type]})],
                 ignore_index=True
             )
